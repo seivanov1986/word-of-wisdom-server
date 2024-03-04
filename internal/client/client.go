@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/seivanov1986/word-of-wisdom-server/internal/helpers/hash_cache_data"
+	"github.com/seivanov1986/word-of-wisdom-server/internal/pkg/logger"
 	"github.com/seivanov1986/word-of-wisdom-server/internal/proto"
 	"github.com/seivanov1986/word-of-wisdom-server/internal/vo"
 )
@@ -21,10 +22,11 @@ const (
 type client struct {
 	address               string
 	hashcashMaxIterations int
+	log                   logger.Logger
 }
 
-func New(address string, hashcashMaxIterations int) *client {
-	return &client{address: address, hashcashMaxIterations: hashcashMaxIterations}
+func New(address string, log logger.Logger, hashcashMaxIterations int) *client {
+	return &client{address: address, log: log, hashcashMaxIterations: hashcashMaxIterations}
 }
 
 func (c *client) Start(ctx context.Context) error {
@@ -38,9 +40,9 @@ func (c *client) Start(ctx context.Context) error {
 		message, err := c.handle(ctx, conn)
 
 		if err != nil {
-			fmt.Println("client error handle connection: ", err)
+			c.log.Println("client error handle connection: ", err)
 		} else {
-			fmt.Println("quote result:", *message)
+			c.log.Println("quote result:", *message)
 		}
 
 		time.Sleep(5 * time.Second)
@@ -72,13 +74,13 @@ func (c *client) handle(ctx context.Context, conn io.ReadWriter) (*string, error
 	if err != nil {
 		return nil, fmt.Errorf("err parse hashcash: %w", err)
 	}
-	fmt.Println("got hashcash:", hashcash)
+	c.log.Println("got hashcash:", hashcash)
 
 	hashcash, err = hashcash.ComputeHashcash(c.hashcashMaxIterations)
 	if err != nil {
 		return nil, fmt.Errorf("err compute hashcash: %w", err)
 	}
-	fmt.Println("hashcash computed:", hashcash)
+	c.log.Println("hashcash computed:", hashcash)
 
 	byteData, err := json.Marshal(hashcash)
 	if err != nil {
@@ -94,7 +96,7 @@ func (c *client) handle(ctx context.Context, conn io.ReadWriter) (*string, error
 	if err != nil {
 		return nil, fmt.Errorf("err send request: %w", err)
 	}
-	fmt.Println("challenge sent to server")
+	c.log.Println("challenge sent to server")
 
 	msgStr, err = reader.ReadString('\n')
 	if err != nil {
@@ -111,7 +113,7 @@ func (c *client) handle(ctx context.Context, conn io.ReadWriter) (*string, error
 }
 
 func (c *client) send(msg []byte, conn io.Writer) error {
-	fmt.Println(string(msg))
+	c.log.Println(string(msg))
 
 	_, err := conn.Write(msg)
 	return err

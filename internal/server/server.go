@@ -15,6 +15,7 @@ import (
 
 	"github.com/seivanov1986/word-of-wisdom-server/internal/helpers/hash_cache_data"
 	"github.com/seivanov1986/word-of-wisdom-server/internal/pkg/cache"
+	"github.com/seivanov1986/word-of-wisdom-server/internal/pkg/logger"
 	"github.com/seivanov1986/word-of-wisdom-server/internal/proto"
 	"github.com/seivanov1986/word-of-wisdom-server/internal/vo"
 )
@@ -28,10 +29,11 @@ type server struct {
 	zerosCount       int
 	hashcashDuration int
 	cache            cache.Cache
+	log              logger.Logger
 }
 
-func New(address string, zerosCount int, cache cache.Cache) *server {
-	return &server{address: address, zerosCount: zerosCount, cache: cache}
+func New(address string, log logger.Logger, zerosCount int, cache cache.Cache) *server {
+	return &server{address: address, log: log, zerosCount: zerosCount, cache: cache}
 }
 
 func (c *server) Start(ctx context.Context) error {
@@ -51,7 +53,7 @@ func (c *server) Start(ctx context.Context) error {
 }
 
 func (c *server) handle(ctx context.Context, conn net.Conn) {
-	fmt.Println("new client:", conn.RemoteAddr())
+	c.log.Println("new client:", conn.RemoteAddr())
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -59,20 +61,20 @@ func (c *server) handle(ctx context.Context, conn net.Conn) {
 	for {
 		req, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("err read connection:", err)
+			c.log.Println("err read connection:", err)
 			return
 		}
 
 		msg, err := c.process(ctx, req, conn.RemoteAddr().String())
 		if err != nil {
-			fmt.Println("err process request:", err)
+			c.log.Println("err process request:", err)
 			return
 		}
 
 		if msg != nil {
 			err := c.send(proto.MessageToBytes(*msg), conn)
 			if err != nil {
-				fmt.Println("err send message:", err)
+				c.log.Println("err send message:", err)
 			}
 		}
 	}
@@ -119,7 +121,7 @@ func (c *server) process(ctx context.Context, msgStr string, clientInfo string) 
 			return nil, err
 		}
 
-		fmt.Printf("client %s succesfully computed hashcash %s\n", clientInfo, msg.Payload)
+		c.log.Println("client %s succesfully computed hashcash %s", clientInfo, msg.Payload)
 
 		payload, err := vo.ParsePayload(string(`{"message": "test string"}`))
 		if err != nil {
@@ -213,7 +215,7 @@ func (c *server) generateRandomValue() (int, error) {
 }
 
 func (c *server) send(msg []byte, conn io.Writer) error {
-	fmt.Println(string(msg))
+	c.log.Println(string(msg))
 
 	_, err := conn.Write(msg)
 	return err
